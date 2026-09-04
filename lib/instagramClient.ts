@@ -15,9 +15,9 @@ function cachePath(key: string): string {
 }
 
 function loadCache<T>(key: string, maxHours: number): T | null {
-  const p = cachePath(key)
-  if (!fs.existsSync(p)) return null
   try {
+    const p = cachePath(key)
+    if (!fs.existsSync(p)) return null
     const entry: IGCacheEntry<T> = JSON.parse(fs.readFileSync(p, 'utf-8'))
     const ageH = (Date.now() - new Date(entry.cached_at).getTime()) / 3_600_000
     return ageH > maxHours ? null : entry.payload
@@ -27,10 +27,14 @@ function loadCache<T>(key: string, maxHours: number): T | null {
 }
 
 function saveCache<T>(key: string, payload: T): void {
-  fs.writeFileSync(
-    cachePath(key),
-    JSON.stringify({ cached_at: new Date().toISOString(), payload }, null, 2)
-  )
+  try {
+    fs.writeFileSync(
+      cachePath(key),
+      JSON.stringify({ cached_at: new Date().toISOString(), payload }, null, 2)
+    )
+  } catch {
+    // cache best-effort — si el FS es de solo lectura simplemente se omite
+  }
 }
 
 // --- API ---
@@ -88,33 +92,39 @@ export async function getIGMedia(forceRefresh = false): Promise<IGMediaItem[]> {
   const fields = 'id,caption,media_type,thumbnail_url,permalink,timestamp,video_duration'
   const allItems: IGMediaItem[] = []
 
-  // Fetch paginado — itera todas las páginas hasta que no haya "next"
-  let url: string | null =
-    `https://graph.instagram.com/v21.0/${userId}/media?fields=${fields}&limit=50&access_token=${token}`
+  try {
+    // Fetch paginado — itera todas las páginas hasta que no haya "next"
+    let url: string | null =
+      `https://graph.instagram.com/v21.0/${userId}/media?fields=${fields}&limit=50&access_token=${token}`
 
-  while (url) {
-    const currentUrl: string = url
-    const res = await fetch(currentUrl)
-    const data = await res.json()
-    if (data.error) throw new Error(`IG API: ${data.error.message}`)
+    while (url) {
+      const currentUrl: string = url
+      const res = await fetch(currentUrl)
+      const data = await res.json()
+      if (data.error) throw new Error(`IG API: ${data.error.message}`)
 
-    const page = (data.data ?? []).filter(
-      (m: IGMediaItem) => m.media_type === 'VIDEO' || m.media_type === 'REEL'
+      const page = (data.data ?? []).filter(
+        (m: IGMediaItem) => m.media_type === 'VIDEO' || m.media_type === 'REEL'
+      )
+      allItems.push(...page)
+
+      url = data.paging?.next ?? null
+    }
+
+    const withInsights = await Promise.all(
+      allItems.map(async (item: IGMediaItem) => ({
+        ...item,
+        insights: await getIGInsights(item.id, token, forceRefresh),
+      }))
     )
-    allItems.push(...page)
 
-    url = data.paging?.next ?? null
+    saveCache('media_list', withInsights)
+    return withInsights
+  } catch (err) {
+    // Token vencido, sin permisos o IG caído: degradar en vez de romper la página.
+    console.error('getIGMedia:', err instanceof Error ? err.message : err)
+    return []
   }
-
-  const withInsights = await Promise.all(
-    allItems.map(async (item: IGMediaItem) => ({
-      ...item,
-      insights: await getIGInsights(item.id, token, forceRefresh),
-    }))
-  )
-
-  saveCache('media_list', withInsights)
-  return withInsights
 }
 
 // Seguidores actuales — cache 6h

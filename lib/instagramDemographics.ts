@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import type { IGCacheEntry } from './instagramTypes'
 
-const CACHE_DIR = 'data/instagram-cache'
+const CACHE_DIR = '/tmp/instagram-cache'
 const CACHE_HOURS = 24
 
 export interface CountryData {
@@ -17,9 +17,9 @@ function cachePath(): string {
 }
 
 function loadCache(): CountryData[] | null {
-  const p = cachePath()
-  if (!fs.existsSync(p)) return null
   try {
+    const p = cachePath()
+    if (!fs.existsSync(p)) return null
     const entry: IGCacheEntry<CountryData[]> = JSON.parse(fs.readFileSync(p, 'utf-8'))
     const ageH = (Date.now() - new Date(entry.cached_at).getTime()) / 3_600_000
     return ageH > CACHE_HOURS ? null : entry.payload
@@ -29,10 +29,14 @@ function loadCache(): CountryData[] | null {
 }
 
 function saveCache(data: CountryData[]): void {
-  fs.writeFileSync(
-    cachePath(),
-    JSON.stringify({ cached_at: new Date().toISOString(), payload: data }, null, 2)
-  )
+  try {
+    fs.writeFileSync(
+      cachePath(),
+      JSON.stringify({ cached_at: new Date().toISOString(), payload: data }, null, 2)
+    )
+  } catch {
+    // cache best-effort — en entornos con FS de solo lectura simplemente se omite
+  }
 }
 
 export async function getFollowerDemographics(): Promise<CountryData[]> {

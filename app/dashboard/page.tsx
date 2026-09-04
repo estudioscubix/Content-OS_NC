@@ -8,6 +8,10 @@ import { getIGMedia, getFollowerCount } from "@/lib/instagramClient"
 import { getDashboardData } from "@/lib/instagramDashboard"
 import { getFollowerDemographics } from "@/lib/instagramDemographics"
 
+// Los datos vienen de la API de Instagram en vivo — renderizar por request,
+// no en el build (evita que un token vencido tumbe el deploy).
+export const dynamic = "force-dynamic"
+
 export default async function DashboardPage() {
   const [media, followerCount, countryData] = await Promise.all([
     getIGMedia(),
