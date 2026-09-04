@@ -33,7 +33,9 @@ export default async function DashboardPage() {
         />
         <MetricCard
           label="Total Guardados"
-          value={(kpis.total_saves / 1000).toFixed(1) + "k"}
+          value={kpis.total_saves >= 1000
+            ? (kpis.total_saves / 1000).toFixed(1) + "k"
+            : kpis.total_saves.toString()}
           icon={<Bookmark size={13} />}
         />
         <MetricCard
