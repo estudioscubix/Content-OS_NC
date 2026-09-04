@@ -49,7 +49,7 @@ export async function getFollowerDemographics(): Promise<CountryData[]> {
 
   try {
     const url =
-      `https://graph.facebook.com/v21.0/${userId}/insights` +
+      `https://graph.instagram.com/v21.0/${userId}/insights` +
       `?metric=follower_demographics` +
       `&period=lifetime` +
       `&metric_type=total_value` +
